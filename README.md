@@ -106,7 +106,6 @@ cmake --build build-cpu -j
 
 ```text
 &track
-  zstop = 1.14
   fft_fieldsolver = true
   cuda_fieldsolver = true
 &end
