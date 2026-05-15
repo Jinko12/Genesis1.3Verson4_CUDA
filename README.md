@@ -1,6 +1,6 @@
 # Genesis 1.3 CUDA GPU Resident
 
-**版本：** `GPUResident Stage 4.2B Simplified (Final, compile-fix)`
+**版本：** `GPUResident Stage 4.2B
 **上游基线：** [Genesis-1.3-Version4](https://github.com/svenreiche/Genesis-1.3-Version4) (4.6.12 / 4.6.x 分支)
 
 本仓库在 Sven Reiche 的 Genesis 1.3 Version 4 之上加入 CUDA GPU 加速路径，目标是让 **beam、field、source deposition、field solve、diagnostics 和 slippage 尽可能保持 GPU resident**，只在 HDF5 输出、CPU fallback、必要 MPI 边界或显式调试时才同步到 host。
