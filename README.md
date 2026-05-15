@@ -20,9 +20,8 @@
 - [5. 默认内置的 CUDA 行为](#5-默认内置的-cuda-行为)
 - [6. 基本运行方式](#6-基本运行方式)
 - [7. MPS 推荐运行](#7-mps-推荐运行)
-- [8. 验证与回归](#10-验证与回归)
-- [9. 已验证性能摘要](#11-已验证性能摘要)
-- [10. 已知限制与 FAQ](#12-已知限制与-faq)
+- [8. 已验证性能摘要](#11-已验证性能摘要)
+- [9. 已知限制与 FAQ](#12-已知限制与-faq)
 
 ---
 
@@ -251,7 +250,7 @@ tools/cuda_stage3_9C_mps_sweep.sh \
 ---
 
 
-### 8 Profiling
+### 7.1 Profiling
 
 ```bash
 # Nsight Systems
@@ -270,7 +269,7 @@ tools/cuda_stage3_6_ncu_profile.sh \
 
 ---
 
-## 9. 已验证性能摘要
+## 8. 已验证性能摘要
 
 大case，Example3-sample=12 ：
 
@@ -293,9 +292,9 @@ tools/cuda_stage3_6_ncu_profile.sh \
 
 ---
 
-## 10. 已知限制与 FAQ
+## 9. 已知限制与 FAQ
 
-### 10.1 已知限制
+### 9.1 已知限制
 
 1. CUDA FFT 是当前主优化路径；ADI CUDA path 不是当前主线。
 2. MPS 是运行环境优化；部分集群可能限制用户启动 MPS。
