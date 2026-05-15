@@ -1,4 +1,4 @@
-<img width="183" height="81" alt="image" src="https://github.com/user-attachments/assets/c3ccd169-dcf9-4be3-833f-1978dc54f9aa" /># Genesis 1.3 CUDA GPU Resident
+# Genesis 1.3 CUDA GPU Resident
 
 **版本：** `GPUResident Stage 4.2B Simplified (Final, compile-fix)`
 **上游基线：** [Genesis-1.3-Version4](https://github.com/svenreiche/Genesis-1.3-Version4) (4.6.12 / 4.6.x 分支)
