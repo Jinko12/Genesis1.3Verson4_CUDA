@@ -5,7 +5,7 @@
 
 本仓库在 Sven Reiche 的 Genesis 1.3 Version 4 之上加入 CUDA GPU 加速路径，目标是让 **beam、field、source deposition、field solve、diagnostics 和 slippage 尽可能保持 GPU resident**，只在 HDF5 输出、CPU fallback、必要 MPI 边界或显式调试时才同步到 host。
 
-**Simplified 版的核心改动：把已经验证稳定的优化路径全部 *内置为默认开启*。** 用户正常运行不再需要写一长串环境变量；只要输入文件启用 CUDA solver，就能拿到完整加速。如果需要数值回归或调试，可用一键开关 `GENESIS_CUDA_SAFE_MODE=1` 关闭所有可选 fast path。
+**可用一键开关 `GENESIS_CUDA_SAFE_MODE=1` 关闭所有可选 fast path。
 
 > 上游版权与许可证遵循 Sven Reiche 原始仓库，本仓库只对 CUDA 路径与运行配套工具做改造与补充。
 
