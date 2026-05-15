@@ -1,4 +1,4 @@
-# Genesis 1.3 CUDA GPU Resident
+<img width="183" height="81" alt="image" src="https://github.com/user-attachments/assets/c3ccd169-dcf9-4be3-833f-1978dc54f9aa" /># Genesis 1.3 CUDA GPU Resident
 
 **版本：** `GPUResident Stage 4.2B Simplified (Final, compile-fix)`
 **上游基线：** [Genesis-1.3-Version4](https://github.com/svenreiche/Genesis-1.3-Version4) (4.6.12 / 4.6.x 分支)
@@ -253,237 +253,8 @@ tools/cuda_stage3_9C_mps_sweep.sh \
 
 ---
 
-## 8. 安全模式与调试回退
 
-### 8.1 安全模式
-
-```bash
-GENESIS_CUDA_SAFE_MODE=1 \
-mpirun -np 16 ./build-cuda/genesis4 input.in
-```
-
-`SAFE_MODE` 会关闭以下可选 fast path：
-
-```
-GENESIS_CUDA_FAST_KERNELS
-GENESIS_CUDA_CACHE_LONGITUDINAL_FIELD
-GENESIS_CUDA_INPLACE_SLIPPAGE
-GENESIS_CUDA_LONGITUDINAL_ALGEBRA_OPT
-GENESIS_CUDA_SYMMETRIC_TRANSVERSE
-```
-
-**不会**关闭 CUDA solver 本身，也不会改变输入文件中选择的 solver。
-
-### 8.2 完全保守 CUDA 调试
-
-如果还需要更保守，可以同时把所有 GPU resident 路径回退到旧的 D2H/H2D 行为：
-
-```bash
-GENESIS_CUDA_SAFE_MODE=1 \
-GENESIS_CUDA_BIND_FFT_FIELD=0 \
-GENESIS_CUDA_DEFER_FIELD_D2H=0 \
-GENESIS_CUDA_MPI_SLIPPAGE=0 \
-GENESIS_CUDA_DIAG_REDUCTION=0 \
-mpirun -np 16 ./build-cuda/genesis4 input.in
-```
-
-### 8.3 调试 / 观测开关
-
-| 环境变量 | 用途 |
-|---|---|
-| `GENESIS_CUDA_VERBOSE_DEVICE=1` | 打印每个 rank 的 GPU 绑定 |
-| `GENESIS_CUDA_PRINT_DEVICE_SUMMARY=1` | 打印每 GPU 的 rank 数汇总 |
-| `GENESIS_CUDA_NVTX=1` | 开启 NVTX range 标注 |
-| `GENESIS_CUDA_MEMORY_AUDIT=1` | 输出 CUDA allocation / cuFFT workspace 审计 |
-
----
-
-## 9. 主要修改内容
-
-### 9.1 Beam SoA 与 GPU beam tracking
-
-将 beam 粒子状态从 CPU AoS/逐 slice 结构转换为 GPU device SoA：
-
-```
-gamma, theta, x/y, px/py, ez, particle_slice, slice_start/slice_count
-```
-
-- 粒子推进使用 CUDA kernel；
-- longitudinal RK4 在 GPU 上完成；
-- transverse tracking 用专门 kernel；
-- 只在 CPU-only physics 或 host 输出时同步。
-
-### 9.2 FFT field solver GPU resident
-
-新增 CUDA FFT field solver，用 cuFFT batched transform 处理多 slice field propagation。
-
-```
-build source on GPU
-batched cuFFT forward
-propagation / filter multiply
-batched cuFFT inverse
-normalization
-```
-
-cuFFT plan 在 solver 生命周期内复用。
-
-### 9.3 BeamSolver 直接绑定 FFT field device buffer
-
-旧路径：
-
-```
-field GPU -> host Field::field -> beam GPU
-```
-
-新路径：
-
-```
-FieldSolverFFTCuda device field
-  -> BeamSolver device pointer table
-  -> beam longitudinal kernel 直接读取
-```
-
-回退：`GENESIS_CUDA_BIND_FFT_FIELD=0`
-
-### 9.4 Source deposition 直接读取 Beam SoA
-
-```
-GPU Beam SoA -> source deposition kernel -> GPU source grid -> cuFFT propagation
-```
-
-只有 Beam CUDA state 不可用时才回退 host `Particle*` staging。
-
-### 9.5 Diagnostics GPU compact reduction
-
-diagnostics 不再默认下载完整 beam / field，host 端只下载 compact 结果：
-
-```
-beam:  per-slice moments, bunching, energy / spread
-field: power, phase, near/far-field compact moments
-```
-
-历史验证：diagnostics/slippage resident 修复后，D2H 从 full-sync 路径的 125,583.84 MB 降至 9.36 MB。
-
-### 9.6 CUDA-resident slippage 与 in-place slippage
-
-- **单 rank**：field slippage 直接在 CUDA FFT field buffer 上完成。
-- **多 rank**：只交换 boundary slice，不下载完整 field record。
-- **Stage 4.0A in-place**：消除 scratch D2D。
-
-```
-field -> scratch -> shifted field   (旧)
-field -> field                       (新, in-place kernel)
-```
-
-验证：
-
-```
-D2D total: 31,212 MB -> 0 MB
-D2D calls: 120 -> 0
-HDF5 correctness: 81/81 datasets passed
-```
-
-### 9.7 multi-rank CUDA slippage boundary
-
-```
-outgoing boundary slice D2H
-MPI exchange one slice
-incoming boundary slice H2D
-CUDA in-place shift / boundary injection
-```
-
-### 9.8 rank-to-device mapping 与 worker budget
-
-```bash
-GENESIS_CUDA_DEVICE_POLICY=local_rank   # 默认
-# 可选：single, block, world_rank
-GENESIS_CUDA_DEVICE=0                   # 强制全部 rank 用 GPU0
-GENESIS_CUDA_MAX_RANKS_PER_DEVICE=8
-GENESIS_CUDA_STRICT_RANK_BUDGET=1
-```
-
-### 9.9 Longitudinal RK FP64 代数等价优化（Stage 4.2B）
-
-NCU 诊断 `beamLongitudinalOneFieldCachedInterpKernel` 为 FP64 math-bound（Compute ~88%，FP64 pipeline ~88%，DRAM 仅 ~5%，occupancy ~99%）。Stage 4.2B 做了保守整理：
-
-```
-invGam = 1 / gamma
-invBtpar0 = 1 / sqrt(1 - btper0 * invGam * invGam)
-```
-
-不使用 fast-math、不使用 mixed precision、不降低 RK 阶数。
-
-验证结果：
-
-```
-Field/power rel_max:       4.2e-12
-Beam/energy rel_max:       3.0e-15
-Beam/energyspread rel_max: 1.2e-8
-Beam/bunching rel_max:     3.4e-12
-```
-
-性能：MPS ON 下额外 +5.4%。
-
-### 9.10 安全模式（Simplified 版新增）
-
-```bash
-GENESIS_CUDA_SAFE_MODE=1
-```
-
-一键关闭所有可选 fast path，便于数值回归与新算例排查。
-
----
-
-## 10. 验证与回归
-
-### 10.1 HDF5 correctness guard
-
-```bash
-python3 tools/cuda_stage3_9B_correctness_guard.py \
-  cpu_or_reference/Example4_a.out.h5 \
-  cuda/Example4_a.out.h5 \
-  --rtol 1e-8 --atol 1e-10
-```
-
-> `Meta/TimeStamp`、`Meta/cwd` 等运行元数据可能不同，这不是物理差异。
-
-### 10.2 性能测试
-
-Rank/GPU sweep：
-
-```bash
-CUDA_VISIBLE_DEVICES=0,1 \
-tools/cuda_stage3_9_worker_sweep.sh \
-  ./build-cuda/genesis4 \
-  examples/Example4-HGHG/Example4_a.cuda_profile.in \
-  1,2,4,8,12,16
-```
-
-MPS sweep：
-
-```bash
-CUDA_VISIBLE_DEVICES=0,1 \
-tools/cuda_stage3_9C_mps_sweep.sh \
-  ./build-cuda/genesis4 \
-  examples/Example4-HGHG/Example4_a.cuda_profile.in \
-  4,8,12,16
-```
-
-In-place slippage / algebra A/B：
-
-```bash
-tools/cuda_stage4_0A_inplace_slippage_profile.sh \
-  ./build-cuda/genesis4 \
-  examples/Example4-HGHG/Example4_a.cuda_profile.in \
-  16
-
-tools/cuda_stage4_2B_longitudinal_algebra_profile.sh \
-  ./build-cuda/genesis4 \
-  examples/Example4-HGHG/Example4_a.cuda_profile.in \
-  16
-```
-
-### 10.3 Profiling
+### 8 Profiling
 
 ```bash
 # Nsight Systems
@@ -502,38 +273,41 @@ tools/cuda_stage3_6_ncu_profile.sh \
 
 ---
 
-## 11. 已验证性能摘要
+## 9. 已验证性能摘要
 
-Example4-HGHG 全程：
+大case，Example3-sample=12 ：
+
+| 配置 | Wall Clock | 相对 CPU ADI 基线 |（AMD EPYC 7H12 ,A100 80G）
+|---|---:|---:|
+| CPU ，100 核 | 6750 s | 1× | 
+| CUDA FFT，4 核，MPS ON | 706 s | 9.6× |
+
+
+小case，Example4-HGHG，小case：
 
 | 配置 | Wall Clock | 相对 CPU ADI 基线 |
 |---|---:|---:|
-| CPU ADI，32 核 | 1647 s | 1× |
-| CPU FFTW，42 核（Genesis 4.6.12） | 299 s | 5.5× |
-| CUDA FFT，16 核，MPS OFF | 72.4 s | 22.7× |
-| CUDA FFT，16 核，MPS ON | 59.3 s | 27.8× |
-| CUDA FFT + ALGEBRA_OPT，16 核，MPS ON | 56.1 s | 29.4× |
+| CPU ，100 ranks | 140 s | 1× |
+| CUDA FFT，4 ranks，MPS ON | 39 s | 3.6× |
+| CUDA FFT，16 ranks，MPS ON | 35 s | 4× |
 
 说明：
-
-- CPU 基线为 ADI 路径，CUDA 为 FFT 路径。
-- 若用于正式论文或报告，应补充 CPU FFTW vs CUDA FFT 的严格 solver-to-solver 对照。
 - HDF5 物理量差异在可忽略范围内（rel_max ≤ 1e-8）。
 
 ---
 
-## 12. 已知限制与 FAQ
+## 10. 已知限制与 FAQ
 
-### 12.1 已知限制
+### 10.1 已知限制
 
 1. CUDA FFT 是当前主优化路径；ADI CUDA path 不是当前主线。
 2. MPS 是运行环境优化；部分集群可能限制用户启动 MPS。
 3. CUDA-aware MPI 尚未作为默认路径实现；当前 multi-rank slippage 使用 boundary slice host staging。
 4. `one4one` / sorting / CPU-only physics 需要单独验证。
-5. 数值正确性是容差一致，不保证 bitwise identical。
+5. 数值正确性是容差一致，（对比时请注意genesis1.3的编译方式，FFTW or ADI），ADI solver 与FFT solver 本身存在小偏差。
 6. CPU ADI vs CUDA FFT 加速比不是严格 solver-to-solver benchmark。
 
-### 12.2 FAQ
+### 11 FAQ
 
 **Q：程序没有使用 CUDA kernel？**
 检查输入文件是否包含：
