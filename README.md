@@ -1,4 +1,4 @@
-# Genesis 1.3 CUDA GPU Resident（简化版）
+# Genesis 1.3 CUDA GPU Resident
 
 **版本：** `GPUResident Stage 4.2B Simplified (Final, compile-fix)`
 **上游基线：** [Genesis-1.3-Version4](https://github.com/svenreiche/Genesis-1.3-Version4) (4.6.12 / 4.6.x 分支)
