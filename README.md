@@ -124,7 +124,7 @@ examples/Example4-HGHG/Example4_a.cuda_profile.in   # profiling 专用，lattice
 
 ## 5. 默认内置的 CUDA 行为
 
-Simplified 版已经把下列优化的默认值内置到程序中，用户**不再需要手动设置**：
+该版本已经把下列优化的默认值内置到程序中，用户**不再需要手动设置**：
 
 ```bash
 GENESIS_CUDA_DEVICE_POLICY=local_rank
