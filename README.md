@@ -152,7 +152,7 @@ GENESIS_CUDA_DIAG_REDUCTION=1
 | `GENESIS_CUDA_MPI_SLIPPAGE` | 1 | multi-rank slippage 默认使用 CUDA-resident path |
 | `GENESIS_CUDA_DIAG_REDUCTION` | 1 | diagnostics 默认 GPU compact reduction |
 
-每个变量都仍可显式设为 0 强制回退（见 [§8 安全模式与调试回退](#8-安全模式与调试回退)）。
+每个变量都仍可显式设为 0 强制回退。
 
 ---
 
@@ -165,7 +165,7 @@ CUDA_VISIBLE_DEVICES=0 \
 mpirun -np 8 ./build-cuda/genesis4 examples/Example4-HGHG/Example4_a.cuda_profile.in
 ```
 
-经验上单 GPU 不是 rank 越多越快，建议先 sweep `4, 8, 12, 16 ranks/GPU`：
+经验上单 GPU 不是 rank 越多越快，建议先 sweep `2, 4, 8, 12 ranks/GPU`：
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 \
@@ -242,10 +242,10 @@ CUDA_VISIBLE_DEVICES=0,1 \
 tools/cuda_stage3_9C_mps_sweep.sh \
   ./build-cuda/genesis4 \
   examples/Example4-HGHG/Example4_a.cuda_profile.in \
-  4,8,12,16
+ 2,4,8,12
 ```
 
-> MPS 是否有收益与 GPU、MPI rank 数、算例规模和集群环境有关。本版本验证：Example4 + 双 GPU + 16 ranks，MPS ON 比 OFF 大约快 20–25%。
+> MPS 是否有收益与 GPU、MPI rank 数、算例规模和集群环境有关。本版本验证：Example4 + 双 GPU + 8 ranks，MPS ON 比 OFF 大约快 20–25%。
 
 ---
 
