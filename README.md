@@ -270,10 +270,10 @@ tools/cuda_stage3_6_ncu_profile.sh \
 ---
 
 ## 8. 已验证性能摘要
-
+（配置 AMD EPYC 7H12 ,A100 80G）
 大case，Example3-sample=12 ：
 
-| 配置 | Wall Clock | 相对 CPU ADI 基线 |（AMD EPYC 7H12 ,A100 80G）
+| 配置 | Wall Clock | 相对 CPU ADI 基线 |
 |---|---:|---:|
 | CPU ，100 核 | 6750 s | 1× | 
 | CUDA FFT，4 核，MPS ON | 706 s | 9.6× |
