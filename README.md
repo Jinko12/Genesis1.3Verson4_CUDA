@@ -270,7 +270,8 @@ tools/cuda_stage3_6_ncu_profile.sh \
 ---
 
 ## 8. 已验证性能摘要
-（配置 AMD EPYC 7H12 ,A100 80G）
+（硬件配置 AMD EPYC 7H12 ,A100 80G）
+
 大case，Example3-sample=12 ：
 
 | 配置 | Wall Clock | 相对 CPU ADI 基线 |
