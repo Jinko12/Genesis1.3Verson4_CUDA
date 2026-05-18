@@ -246,7 +246,7 @@ tools/cuda_stage3_9C_mps_sweep.sh \
  2,4,8,12
 ```
 
-> MPS 是否有收益与 GPU、MPI rank 数、算例规模和集群环境有关。本版本验证：Example4 + 双 GPU + 8 ranks，MPS ON 比 OFF 大约快 20–25%。
+> MPS 是否有收益与 GPU、MPI rank 数、算例规模和集群环境有关。
 
 ---
 
@@ -301,9 +301,10 @@ tools/cuda_stage3_6_ncu_profile.sh \
 1. CUDA FFT 是当前主优化路径；ADI CUDA path 不是当前主线。
 2. MPS 是运行环境优化；部分集群可能限制用户启动 MPS。
 3. CUDA-aware MPI 尚未作为默认路径实现；当前 multi-rank slippage 使用 boundary slice host staging。
-4. `one4one` / sorting / CPU-only physics 需要单独验证。
+4. `one4one` / sorting / CPU-only physics （space charge...）需要单独验证。
 5. 数值正确性是容差一致，（对比时请注意genesis1.3的编译方式，FFTW or ADI），ADI solver 与FFT solver 本身存在小偏差。
 6. CPU ADI vs CUDA FFT 加速比不是严格 solver-to-solver benchmark。
+7.像example3 这样的大case需要较大的显存，显存较小的机器出现OOM(out of memory/money[旺柴])，这是无法避免的。该版本已经继承了Genesis原本优秀的内存规划，未来可能会针对性的做显存占用优化。
 
 ### 11 FAQ
 
