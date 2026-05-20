@@ -1,63 +1,65 @@
 # Genesis 1.3 CUDA GPU Resident
 
-**版本：** `GPUResident Stage 4.2B
-**上游基线：** [Genesis-1.3-Version4](https://github.com/svenreiche/Genesis-1.3-Version4) (4.6.12)
+[English](./README.md) | [中文](./README_CN.md)
 
-本仓库在 Sven Reiche 的 Genesis 1.3 Version 4 之上加入 CUDA GPU 加速路径，目标是让 **beam、field、source deposition、field solve、diagnostics 和 slippage 尽可能保持 GPU resident**，只在 HDF5 输出、CPU fallback、必要 MPI 边界或显式调试时才同步到 host。
+**Version:** `GPUResident Stage 4.2B`
+**Upstream baseline:** [Genesis-1.3-Version4](https://github.com/svenreiche/Genesis-1.3-Version4) (4.6.12)
 
-**可用一键开关 `GENESIS_CUDA_SAFE_MODE=1` 关闭所有可选 fast path。
+This repository adds a CUDA GPU acceleration path on top of Sven Reiche's Genesis 1.3 Version 4. The goal is to keep **beam, field, source deposition, field solve, diagnostics, and slippage as GPU resident as much as possible**, and to synchronize with the host only for HDF5 output, CPU fallback, required MPI boundaries, or explicit debugging.
 
-> 上游版权与许可证遵循 Sven Reiche 原始仓库，本仓库只对 CUDA 路径与运行配套工具做改造与补充。 定期维护。
+**A one-step switch `GENESIS_CUDA_SAFE_MODE=1` can be used to disable all optional fast paths.**
 
+> Upstream copyright and licensing follow Sven Reiche's original repository. This repository only modifies and supplements the CUDA path and runtime support tools. Maintained regularly.
 
----
-
-## 目录
-
-- [1. 版本定位与核心原则](#1-版本定位与核心原则)
-- [2. 推荐硬件与软件环境](#2-推荐硬件与软件环境)
-- [3. 编译](#3-编译)
-- [4. 输入文件配置](#4-输入文件配置)
-- [5. 默认内置的 CUDA 行为](#5-默认内置的-cuda-行为)
-- [6. 基本运行方式](#6-基本运行方式)
-- [7. MPS 推荐运行](#7-mps-推荐运行)
-- [8. 已验证性能摘要](#11-已验证性能摘要)
-- [9. 已知限制与 FAQ](#12-已知限制与-faq)
 
 ---
 
-## 1. 版本定位与核心原则
+## Table of Contents
 
-- 在保持 Genesis 原有物理模型和输入文件语义的基础上加入 GPU resident 主路径。
-- 已验证稳定的 CUDA 优化路径默认开启。
-- 保留所有 CPU fallback 与安全模式开关。
-- **不会自动替用户改变 solver 选择**：是否启用 CUDA FFT field solver，仍由输入文件中的 `cuda_fieldsolver=true` / `fft_fieldsolver=true` 决定。
-- **不会自动启动 MPS**：MPS 是运行环境策略，由用户或作业脚本控制。
+- [1. Version Positioning and Core Principles](#1-version-positioning-and-core-principles)
+- [2. Recommended Hardware and Software Environment](#2-recommended-hardware-and-software-environment)
+- [3. Build](#3-build)
+- [4. Input File Configuration](#4-input-file-configuration)
+- [5. Default Built-in CUDA Behavior](#5-default-built-in-cuda-behavior)
+- [6. Basic Run Modes](#6-basic-run-modes)
+- [7. Recommended MPS Run Mode](#7-recommended-mps-run-mode)
+- [8. Verified Performance Summary](#8-verified-performance-summary)
+- [9. Known Limitations and FAQ](#9-known-limitations-and-faq)
 
 ---
 
-## 2. 推荐硬件与软件环境
+## 1. Version Positioning and Core Principles
 
-### 2.1 硬件
+- Add a GPU-resident main path while preserving the original Genesis physics model and input-file semantics.
+- CUDA optimization paths that have been verified as stable are enabled by default.
+- Keep all CPU fallback paths and safe-mode switches available.
+- **The solver choice is not changed automatically for the user**: whether to enable the CUDA FFT field solver is still determined by `cuda_fieldsolver=true` / `fft_fieldsolver=true` in the input file.
+- **MPS is not started automatically**: MPS is a runtime-environment policy controlled by the user or job script.
 
-- NVIDIA GPU：建议 A100、H100、L40S、RTX 6000 Ada、RTX 4090 或同级。
-- 显存：建议 ≥ 24 GB；大规模 slices/particles/多 field 需更多。
-- CPU：≥ 16 核。
-- 内存：≥ 64 GB。
+---
 
-### 2.2 软件
+## 2. Recommended Hardware and Software Environment
+
+### 2.1 Hardware
+
+- NVIDIA GPU: A100, H100, L40S, RTX 6000 Ada, RTX 4090, or similar GPUs are recommended.
+- GPU memory: ≥ 24 GB is recommended; large-scale slices/particles/multiple fields require more.
+- CPU: ≥ 16 cores.
+- System memory: ≥ 64 GB.
+
+### 2.2 Software
 
 - Linux x86_64
 - CMake 3.18+
-- 支持 C++17 的 GCC/G++
-- CUDA Toolkit（NVCC、cuFFT、cuDART）
-- MPI：OpenMPI 或 MPICH
-- HDF5：建议 parallel HDF5
-- FFTW（可选，用于 CPU FFT fallback 或 CPU 对照）
+- GCC/G++ with C++17 support
+- CUDA Toolkit (NVCC, cuFFT, cuDART)
+- MPI: OpenMPI or MPICH
+- HDF5: parallel HDF5 is recommended
+- FFTW (optional, for CPU FFT fallback or CPU comparison)
 
 ---
 
-## 3. 编译
+## 3. Build
 
 ```bash
 cmake -S . -B build-cuda \
@@ -67,18 +69,18 @@ cmake -S . -B build-cuda \
 cmake --build build-cuda -j
 ```
 
-按 GPU 架构调整 `GENESIS_CUDA_ARCHITECTURES`：
+Adjust `GENESIS_CUDA_ARCHITECTURES` according to the GPU architecture:
 
-| GPU | 推荐值 |
+| GPU | Recommended value |
 |---|---:|
 | V100 | 70 |
-| RTX 20 系 / T4 | 75 |
+| RTX 20 series / T4 | 75 |
 | A100 / A30 | 80 |
-| RTX 30 系 | 86 |
-| L40S / RTX 6000 Ada / RTX 40 系 | 89 |
+| RTX 30 series | 86 |
+| L40S / RTX 6000 Ada / RTX 40 series | 89 |
 | H100 | 90 |
 
-如果 HDF5 在 conda 环境中：
+If HDF5 is in a conda environment:
 
 ```bash
 cmake -S . -B build-cuda \
@@ -87,22 +89,22 @@ cmake -S . -B build-cuda \
   -DHDF5_ROOT=/path/to/conda/env
 ```
 
-编译产物：`build-cuda/genesis4`
+Build output: `build-cuda/genesis4`
 
-### CPU 对照编译（可选）
+### CPU Reference Build (optional)
 
 ```bash
 cmake -S . -B build-cpu -DUSE_CUDA=OFF
 cmake --build build-cpu -j
 ```
 
-> 严格性能对照时应区分 CPU ADI、CPU FFTW、CUDA FFT，不建议把 CPU ADI 与 CUDA FFT 作为 solver-to-solver 的严格对照。
+> For strict performance comparisons, CPU ADI, CPU FFTW, and CUDA FFT should be distinguished. It is not recommended to treat CPU ADI vs CUDA FFT as a strict solver-to-solver comparison.
 
 ---
 
-## 4. 输入文件配置
+## 4. Input File Configuration
 
-在 `&track` 中启用 CUDA FFT field solver：
+Enable the CUDA FFT field solver in `&track`:
 
 ```text
 &track
@@ -111,21 +113,21 @@ cmake --build build-cpu -j
 &end
 ```
 
-`cuda_beam` 默认跟随 `cuda_fieldsolver`，通常不需要单独设置。
+`cuda_beam` follows `cuda_fieldsolver` by default, so it usually does not need to be set separately.
 
-仓库内提供的示例输入：
+Example inputs provided in this repository:
 
 ```
 examples/Example3-TimeDependent/Example3.cuda.in
 examples/Example4-HGHG/Example4_a.cuda.in
-examples/Example4-HGHG/Example4_a.cuda_profile.in   # profiling 专用，lattice 路径用相对仓库根目录
+examples/Example4-HGHG/Example4_a.cuda_profile.in   # for profiling; lattice paths are relative to the repository root
 ```
 
 ---
 
-## 5. 默认内置的 CUDA 行为
+## 5. Default Built-in CUDA Behavior
 
-该版本已经把下列优化的默认值内置到程序中，用户**不再需要手动设置**：
+The following optimization defaults have already been built into this version, so users **no longer need to set them manually**:
 
 ```bash
 GENESIS_CUDA_DEVICE_POLICY=local_rank
@@ -139,34 +141,34 @@ GENESIS_CUDA_MPI_SLIPPAGE=1
 GENESIS_CUDA_DIAG_REDUCTION=1
 ```
 
-含义概览：
+Meaning overview:
 
-| 默认项 | 默认值 | 作用 |
+| Default item | Default value | Purpose |
 |---|---:|---|
-| `GENESIS_CUDA_DEVICE_POLICY` | `local_rank` | MPI local rank 按可见 GPU 轮转映射 |
-| `GENESIS_CUDA_FAST_KERNELS` | 1 | 启用已验证的 CUDA fast kernels |
-| `GENESIS_CUDA_CACHE_LONGITUDINAL_FIELD` | 1 | longitudinal RK 步内缓存 field interpolation |
-| `GENESIS_CUDA_INPLACE_SLIPPAGE` | 1 | 使用 in-place CUDA slippage，避免 scratch D2D copy |
-| `GENESIS_CUDA_LONGITUDINAL_ALGEBRA_OPT` | 1 | FP64 代数等价整理 |
-| `GENESIS_CUDA_BIND_FFT_FIELD` | 1 | BeamSolver 直接绑定 FFT field device buffer |
-| `GENESIS_CUDA_DEFER_FIELD_D2H` | 1 | 默认延迟 field 的 D2H，只在必要边界同步 |
-| `GENESIS_CUDA_MPI_SLIPPAGE` | 1 | multi-rank slippage 默认使用 CUDA-resident path |
-| `GENESIS_CUDA_DIAG_REDUCTION` | 1 | diagnostics 默认 GPU compact reduction |
+| `GENESIS_CUDA_DEVICE_POLICY` | `local_rank` | Round-robin mapping from MPI local ranks to visible GPUs |
+| `GENESIS_CUDA_FAST_KERNELS` | 1 | Enable verified CUDA fast kernels |
+| `GENESIS_CUDA_CACHE_LONGITUDINAL_FIELD` | 1 | Cache field interpolation within longitudinal RK steps |
+| `GENESIS_CUDA_INPLACE_SLIPPAGE` | 1 | Use in-place CUDA slippage to avoid scratch D2D copies |
+| `GENESIS_CUDA_LONGITUDINAL_ALGEBRA_OPT` | 1 | FP64 algebraically equivalent simplification |
+| `GENESIS_CUDA_BIND_FFT_FIELD` | 1 | Bind BeamSolver directly to the FFT field device buffer |
+| `GENESIS_CUDA_DEFER_FIELD_D2H` | 1 | Defer field D2H by default and synchronize only at required boundaries |
+| `GENESIS_CUDA_MPI_SLIPPAGE` | 1 | Use the CUDA-resident path by default for multi-rank slippage |
+| `GENESIS_CUDA_DIAG_REDUCTION` | 1 | Use GPU compact reduction by default for diagnostics |
 
-每个变量都仍可显式设为 0 强制回退。
+Each variable can still be explicitly set to 0 to force fallback.
 
 ---
 
-## 6. 基本运行方式
+## 6. Basic Run Modes
 
-### 6.1 单 GPU
+### 6.1 Single GPU
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 \
 mpirun -np 8 ./build-cuda/genesis4 examples/Example4-HGHG/Example4_a.cuda_profile.in
 ```
 
-经验上单 GPU 不是 rank 越多越快，建议先 sweep `2, 4, 8, 12 ranks/GPU`：
+In practice, using more ranks on a single GPU is not always faster. It is recommended to first sweep `2, 4, 8, 12 ranks/GPU`:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0 \
@@ -176,14 +178,14 @@ tools/cuda_stage3_9_worker_sweep.sh \
   1,2,4,8,12,16,24,32
 ```
 
-### 6.2 多 GPU
+### 6.2 Multi-GPU
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1 \
 mpirun -np 16 ./build-cuda/genesis4 examples/Example4-HGHG/Example4_a.cuda_profile.in
 ```
 
-默认 `local_rank` 策略下，双 GPU、16 ranks 会形成：
+With the default `local_rank` policy, two GPUs with 16 ranks will form the following mapping:
 
 ```
 rank 0 -> GPU0    rank 1 -> GPU1
@@ -191,7 +193,7 @@ rank 2 -> GPU0    rank 3 -> GPU1
 ...
 ```
 
-查看 rank-to-device mapping：
+To check the rank-to-device mapping:
 
 ```bash
 GENESIS_CUDA_VERBOSE_DEVICE=1 \
@@ -199,24 +201,24 @@ GENESIS_CUDA_PRINT_DEVICE_SUMMARY=1 \
 mpirun -np 16 ./build-cuda/genesis4 input.in
 ```
 
-### 6.3 example 目录下提供的快捷脚本
+### 6.3 Convenience scripts provided under the example directories
 
 ```bash
-# 单 GPU，8 ranks（默认）
+# Single GPU, 8 ranks by default
 ./examples/Example4-HGHG/run_gpu.sh
 
-# 双 GPU，16 ranks
+# Two GPUs, 16 ranks
 NRANK=16 GPUS=0,1 ./examples/Example4-HGHG/run_gpu.sh
 
-# Example3 同理
+# Same for Example3
 ./examples/Example3-TimeDependent/run_gpu.sh
 ```
 
 ---
 
-## 7. MPS 推荐运行
+## 7. Recommended MPS Run Mode
 
-多 MPI ranks 共享同一张 GPU 时，建议测试 NVIDIA MPS。MPS 不由程序内部启动，需要用户或作业脚本显式启动。
+When multiple MPI ranks share the same GPU, it is recommended to test NVIDIA MPS. MPS is not started internally by the program; it must be started explicitly by the user or job script.
 
 ```bash
 export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps-pipe-$USER
@@ -234,9 +236,9 @@ mpirun -np 16 \
 echo quit | nvidia-cuda-mps-control
 ```
 
-example 目录下有快捷脚本 `run_gpu_mps.sh`，会自动启动 MPS daemon 并在退出时清理。
+A convenience script `run_gpu_mps.sh` is provided under the example directories. It automatically starts the MPS daemon and cleans it up on exit.
 
-A/B 测试：
+A/B testing:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1 \
@@ -246,7 +248,7 @@ tools/cuda_stage3_9C_mps_sweep.sh \
  2,4,8,12
 ```
 
-> MPS 是否有收益与 GPU、MPI rank 数、算例规模和集群环境有关。
+> Whether MPS provides a benefit depends on the GPU, number of MPI ranks, case size, and cluster environment.
 
 ---
 
@@ -266,96 +268,96 @@ tools/cuda_stage3_6_ncu_profile.sh \
   examples/Example4-HGHG/Example4_a.cuda_profile.in 16
 ```
 
-`ERR_NVGPUCTRPERM` 表示没有 GPU performance counter 权限，需要管理员调整。
+`ERR_NVGPUCTRPERM` means that the user does not have GPU performance-counter permissions and that administrator adjustment is required.
 
 ---
 
-## 8. 已验证性能摘要
-（硬件配置 AMD EPYC 7H12 ,A100 80G）
+## 8. Verified Performance Summary
+(Hardware configuration: AMD EPYC 7H12, A100 80G)
 
-大case，Example3-sample=12 ：
+Large case, Example3-sample=12:
 
-| 配置 | Wall Clock | 相对 CPU ADI 基线 |
+| Configuration | Wall Clock | Relative to CPU ADI baseline |
 |---|---:|---:|
-| CPU ，100 核 | 6750 s | 1× | 
-| CUDA FFT，4 核，MPS ON | 706 s | 9.6× |
+| CPU, 100 cores | 6750 s | 1× | 
+| CUDA FFT, 4 cores, MPS ON | 706 s | 9.6× |
 
 
-小case，Example4-HGHG，小case：
+Small case, Example4-HGHG:
 
-| 配置 | Wall Clock | 相对 CPU ADI 基线 |
+| Configuration | Wall Clock | Relative to CPU ADI baseline |
 |---|---:|---:|
-| CPU ，100 ranks | 140 s | 1× |
-| CUDA FFT，4 ranks，MPS ON | 39 s | 3.6× |
-| CUDA FFT，16 ranks，MPS ON | 35 s | 4× |
+| CPU, 100 ranks | 140 s | 1× |
+| CUDA FFT, 4 ranks, MPS ON | 39 s | 3.6× |
+| CUDA FFT, 16 ranks, MPS ON | 35 s | 4× |
 
-说明：
-- HDF5 物理量差异在可忽略范围内（rel_max ≤ 1e-8）。
+Notes:
+- Differences in HDF5 physical quantities are within a negligible range (rel_max ≤ 1e-8).
 
 ---
 
-## 9. 已知限制与 FAQ
+## 9. Known Limitations and FAQ
 
-### 9.1 已知限制
+### 9.1 Known Limitations
 
-1. CUDA FFT 是当前主优化路径；ADI CUDA path 不是当前主线。
-2. MPS 是运行环境优化；部分集群可能限制用户启动 MPS。
-3. CUDA-aware MPI 尚未作为默认路径实现；当前 multi-rank slippage 使用 boundary slice host staging。
-4. `one4one` / sorting / CPU-only physics (比如space charge)需要单独验证。
-5. 数值正确性是容差一致，（对比时请注意genesis1.3的编译方式，FFTW or ADI），ADI solver 与FFT solver 本身存在小偏差。
-6. CPU ADI vs CUDA FFT 加速比不是严格 solver-to-solver benchmark。
-7. 像example3 这样的大case需要较大的显存，显存较小的机器出现OOM(out of memory/money🐶)，这是无法避免的。该版本已经继承了Genesis原本优秀的内存规划，未来可能会针对性的做紧凑化显存占用。
+1. CUDA FFT is the current main optimization path; the ADI CUDA path is not the current focus.
+2. MPS is a runtime-environment optimization; some clusters may restrict users from starting MPS.
+3. CUDA-aware MPI has not yet been implemented as the default path; the current multi-rank slippage uses boundary-slice host staging.
+4. `one4one` / sorting / CPU-only physics, such as space charge, need to be validated separately.
+5. Numerical correctness is tolerance-based. When comparing results, please pay attention to how Genesis 1.3 is built, such as FFTW or ADI. The ADI solver and FFT solver have small inherent differences.
+6. The CPU ADI vs CUDA FFT speedup is not a strict solver-to-solver benchmark.
+7. Large cases such as Example3 require substantial GPU memory. OOM (out of memory/money🐶) on machines with small GPU memory is unavoidable. This version already inherits the excellent memory planning of the original Genesis, and future work may target more compact GPU-memory usage.
 
 ### 11 FAQ
 
-**Q：程序没有使用 CUDA kernel？**
-检查输入文件是否包含：
+**Q: The program does not use CUDA kernels.**
+Check whether the input file contains:
 
 ```text
 cuda_fieldsolver = true
 fft_fieldsolver = true
 ```
 
-**Q：多 GPU 只用 GPU0？**
-检查：
+**Q: Multi-GPU only uses GPU0.**
+Check:
 
 ```bash
 GENESIS_CUDA_VERBOSE_DEVICE=1
 GENESIS_CUDA_PRINT_DEVICE_SUMMARY=1
 ```
 
-是否设置了：
+Check whether the following variables are set:
 
 ```bash
 GENESIS_CUDA_DEVICE=0
 CUDA_VISIBLE_DEVICES=0
 ```
 
-**Q：数值回归时想关闭所有 fast path？**
+**Q: I want to disable all fast paths for numerical regression.**
 ```bash
 GENESIS_CUDA_SAFE_MODE=1
 ```
 
-需要更保守可叠加 `GENESIS_CUDA_BIND_FFT_FIELD=0` 等。
+For a more conservative run, additional variables such as `GENESIS_CUDA_BIND_FFT_FIELD=0` can be combined.
 
-**Q：MPS 启动失败？**
-常见原因：
+**Q: MPS fails to start.**
+Common reasons:
 
-- 没有 `nvidia-cuda-mps-control`；
-- 没有权限；
-- 旧的 MPS daemon 没退出；
-- `CUDA_MPS_PIPE_DIRECTORY` 或 `CUDA_MPS_LOG_DIRECTORY` 不存在。
+- `nvidia-cuda-mps-control` is not available;
+- insufficient permission;
+- an old MPS daemon has not exited;
+- `CUDA_MPS_PIPE_DIRECTORY` or `CUDA_MPS_LOG_DIRECTORY` does not exist.
 
-先 `echo quit | nvidia-cuda-mps-control`，再重新启动。
+First run `echo quit | nvidia-cuda-mps-control`, then start it again.
 
-**Q：是否必须使用 MPS？**
-不是。MPS 是推荐生产运行方式，不是功能依赖。无 MPS 也能运行，只是多 rank/GPU 下可能性能较低。
+**Q: Is MPS required?**
+No. MPS is a recommended production run mode, not a functional dependency. The program can run without MPS, but performance may be lower when multiple ranks share one GPU.
 
-**Q：是否可以用更多 MPI ranks？**
-可以，但不一定更快。建议先 sweep ranks/GPU。MPS ON 下 4–16 ranks/GPU 通常都稳定；无 MPS 时 8 ranks/GPU 是较好起点。
+**Q: Can I use more MPI ranks?**
+Yes, but it may not be faster. It is recommended to sweep ranks/GPU first. With MPS ON, 4–16 ranks/GPU are usually stable; without MPS, 8 ranks/GPU is a good starting point.
 
 ---
 
-## 致谢
+## Acknowledgements
 
-本仓库基于 [Sven Reiche 的 Genesis-1.3-Version4](https://github.com/svenreiche/Genesis-1.3-Version4)。CUDA 改造与运行配套工具是本仓库的增量贡献，其余代码版权与许可证遵循上游仓库。
+This repository is based on [Sven Reiche's Genesis-1.3-Version4](https://github.com/svenreiche/Genesis-1.3-Version4). The CUDA modifications and runtime support tools are incremental contributions from this repository. Copyright and licensing for the remaining code follow the upstream repository.
